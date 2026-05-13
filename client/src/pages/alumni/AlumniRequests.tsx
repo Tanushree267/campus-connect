@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ReferralRequestCard } from "@/components/ReferralRequestCard";
-import { getReceivedReferralRequests, getSentReferralRequests, updateReferralRequestStatus } from "@/lib/api";
+import { analyzeReferralAts, getReceivedReferralRequests, getSentReferralRequests, updateReferralRequestStatus } from "@/lib/api";
 import { LayoutDashboard, Search, Users, FileText, Newspaper, PlusCircle, User, Settings, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
@@ -24,6 +24,7 @@ export default function AlumniRequests() {
   const [sent, setSent] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [atsProcessingIds, setAtsProcessingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (authLoading || !currentUser) return;
@@ -69,6 +70,30 @@ export default function AlumniRequests() {
     }
   };
 
+  const handleRunAtsAnalysis = async (requestId: string) => {
+    if (!requestId) return;
+
+    setAtsProcessingIds(prev => new Set(prev).add(requestId));
+
+    try {
+      const atsResult = await analyzeReferralAts(requestId);
+      setReceived(prev => prev.map(request => {
+        const currentId = request.id || request._id;
+        return currentId === requestId ? { ...request, ...atsResult } : request;
+      }));
+      toast.success("ATS analysis completed");
+    } catch (error) {
+      console.error("Failed to run ATS analysis:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to run ATS analysis");
+    } finally {
+      setAtsProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(requestId);
+        return next;
+      });
+    }
+  };
+
   if (authLoading || !currentUser) {
     return null;
   }
@@ -103,6 +128,8 @@ export default function AlumniRequests() {
                     perspective="receiver"
                     onAccept={() => !processingIds.has(requestId) && handleStatusUpdate(requestId, "accepted")}
                     onReject={() => !processingIds.has(requestId) && handleStatusUpdate(requestId, "rejected")}
+                    onRunAts={() => !atsProcessingIds.has(requestId) && handleRunAtsAnalysis(requestId)}
+                    atsProcessing={atsProcessingIds.has(requestId)}
                   />
                 );
               })

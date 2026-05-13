@@ -1,6 +1,7 @@
 import express from "express";
 import { body } from "express-validator";
 import {
+  analyzeAts,
   createReferralRequest,
   getSentRequests,
   getReceivedRequests,
@@ -44,6 +45,9 @@ router.get("/sent", getSentRequests);
 
 // GET /api/referrals/received - Get requests received by current alumni
 router.get("/received", getReceivedRequests);
+
+// POST /api/referrals/:id/analyze-ats - Analyze resume against referral post
+router.post("/:id/analyze-ats", analyzeAts);
 
 // PATCH /api/referrals/:id/status - Update request status
 router.patch("/:id/status", updateRequestStatus);

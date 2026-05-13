@@ -6,10 +6,19 @@ import { validationResult } from "express-validator";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+import { PDFParse } from "pdf-parse";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const resumeUploadDir = path.resolve(__dirname, "../../uploads/resumes");
+const ATS_JSON_SHAPE = {
+  summary: "",
+  matchedSkills: [],
+  missingSkills: [],
+  strengths: [],
+  weaknesses: [],
+  recommendation: "",
+};
 
 const activePostFilter = () => ({
   $or: [
@@ -45,6 +54,183 @@ const serializePost = (post) => {
   };
 };
 
+const hasCachedAtsReport = (request) =>
+  typeof request.atsScore === "number" &&
+  request.atsReport &&
+  typeof request.atsReport.summary === "string";
+
+const serializeAtsResult = (request) => ({
+  atsScore: Math.max(0, Math.min(100, Math.round(Number(request.atsScore) || 0))),
+  summary: request.atsReport?.summary || "",
+  matchedSkills: Array.isArray(request.atsReport?.matchedSkills) ? request.atsReport.matchedSkills : [],
+  missingSkills: Array.isArray(request.atsReport?.missingSkills) ? request.atsReport.missingSkills : [],
+  strengths: Array.isArray(request.atsReport?.strengths) ? request.atsReport.strengths : [],
+  weaknesses: Array.isArray(request.atsReport?.weaknesses) ? request.atsReport.weaknesses : [],
+  recommendation: request.atsReport?.recommendation || "",
+});
+
+const resolveResumePath = (resumeUrl) => {
+  const rawUrl = String(resumeUrl || "").trim();
+  let pathname = rawUrl;
+
+  if (/^https?:\/\//i.test(rawUrl)) {
+    pathname = new URL(rawUrl).pathname;
+  }
+
+  if (!pathname.startsWith("/resumes/")) {
+    throw new Error("Only locally uploaded referral resumes can be analyzed");
+  }
+
+  const fileName = path.basename(pathname);
+  if (!fileName.toLowerCase().endsWith(".pdf")) {
+    throw new Error("Resume must be a PDF file");
+  }
+
+  return path.join(resumeUploadDir, fileName);
+};
+
+const buildJobText = (post) => {
+  const metadataEntries = Object.entries(post.metadata || {})
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : String(value)}`);
+
+  return [
+    `Title: ${post.title}`,
+    `Company: ${post.company}`,
+    `Domain: ${post.domain}`,
+    `Description: ${post.description}`,
+    metadataEntries.length ? `Additional details: ${metadataEntries.join("; ")}` : "",
+  ].filter(Boolean).join("\n");
+};
+
+const extractJsonObject = (content) => {
+  const text = String(content || "").trim();
+  const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fencedMatch ? fencedMatch[1].trim() : text;
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("AI response did not contain a JSON object");
+  }
+
+  return JSON.parse(candidate.slice(start, end + 1));
+};
+
+const normalizeStringArray = (value) =>
+  Array.isArray(value)
+    ? value.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 20)
+    : [];
+
+const normalizeAtsAnalysis = (analysis) => ({
+  atsScore: Math.max(0, Math.min(100, Math.round(Number(analysis.atsScore) || 0))),
+  summary: String(analysis.summary || "").trim(),
+  matchedSkills: normalizeStringArray(analysis.matchedSkills),
+  missingSkills: normalizeStringArray(analysis.missingSkills),
+  strengths: normalizeStringArray(analysis.strengths),
+  weaknesses: normalizeStringArray(analysis.weaknesses),
+  recommendation: String(analysis.recommendation || "").trim(),
+});
+
+const buildAtsPrompt = (resumeText, jobText) => `You are an expert ATS (Applicant Tracking System) evaluator.
+
+Compare the following resume and job description.
+
+Return ONLY valid JSON:
+
+{
+  "atsScore": number (0-100),
+  "summary": string,
+  "matchedSkills": string[],
+  "missingSkills": string[],
+  "strengths": string[],
+  "weaknesses": string[],
+  "recommendation": string
+}
+
+Scoring rules:
+- Skills relevance: 40%
+- Experience relevance: 30%
+- Education relevance: 10%
+- Project relevance: 20%
+
+Resume:
+"""
+${resumeText}
+"""
+
+Job Description:
+"""
+${jobText}
+"""`;
+
+const callGroqAtsModel = async (prompt) => {
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: process.env.GROQ_ATS_MODEL || "llama-3.1-8b-instant",
+      temperature: 0,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: "Return deterministic ATS analysis as valid JSON only." },
+        { role: "user", content: prompt },
+      ],
+    }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || "Groq ATS analysis failed");
+  }
+
+  return data.choices?.[0]?.message?.content;
+};
+
+const callOpenAtsModel = async (prompt) => {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: process.env.OPENAI_ATS_MODEL || "gpt-4o-mini",
+      temperature: 0,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: "Return deterministic ATS analysis as valid JSON only." },
+        { role: "user", content: prompt },
+      ],
+    }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || "OpenAI ATS analysis failed");
+  }
+
+  return data.choices?.[0]?.message?.content;
+};
+
+const analyzeWithLlm = async (resumeText, jobText) => {
+  const prompt = buildAtsPrompt(resumeText, jobText);
+  const content = process.env.GROQ_API_KEY
+    ? await callGroqAtsModel(prompt)
+    : process.env.OPENAI_API_KEY
+      ? await callOpenAtsModel(prompt)
+      : null;
+
+  if (!content) {
+    throw new Error("Set GROQ_API_KEY or OPENAI_API_KEY to run ATS analysis");
+  }
+
+  return normalizeAtsAnalysis(extractJsonObject(content));
+};
+
 const serializeReferralRequest = (request) => {
   const plain = request.toObject ? request.toObject() : request;
   const requester = typeof plain.requesterId === "object" ? serializeUser(plain.requesterId) : null;
@@ -61,6 +247,94 @@ const serializeReferralRequest = (request) => {
     alumni,
     referralPost,
   };
+};
+
+export const analyzeAts = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const request = await ReferralRequest.findById(id);
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "Referral request not found",
+      });
+    }
+
+    if (req.user.role !== "alumni" || request.alumniId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Only the receiving alumni can run ATS analysis",
+      });
+    }
+
+    if (hasCachedAtsReport(request)) {
+      return res.json({
+        success: true,
+        cached: true,
+        ...serializeAtsResult(request),
+      });
+    }
+
+    const post = await Post.findById(request.referralPostId).lean();
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Referral post not found",
+      });
+    }
+
+    let resumeBuffer;
+    try {
+      resumeBuffer = await fs.readFile(resolveResumePath(request.resumeUrl));
+    } catch (fileError) {
+      return res.status(400).json({
+        success: false,
+        message: fileError.message || "Unable to read resume PDF",
+      });
+    }
+
+    const parser = new PDFParse({ data: resumeBuffer });
+    let parsedResume;
+    try {
+      parsedResume = await parser.getText();
+    } finally {
+      await parser.destroy();
+    }
+    const resumeText = String(parsedResume.text || "").trim();
+    if (!resumeText) {
+      return res.status(400).json({
+        success: false,
+        message: "Could not extract text from resume PDF",
+      });
+    }
+
+    const analysis = await analyzeWithLlm(resumeText.slice(0, 24000), buildJobText(post).slice(0, 12000));
+
+    request.atsScore = analysis.atsScore;
+    request.atsReport = {
+      ...ATS_JSON_SHAPE,
+      summary: analysis.summary,
+      matchedSkills: analysis.matchedSkills,
+      missingSkills: analysis.missingSkills,
+      strengths: analysis.strengths,
+      weaknesses: analysis.weaknesses,
+      recommendation: analysis.recommendation,
+    };
+    await request.save();
+
+    res.json({
+      success: true,
+      cached: false,
+      ...serializeAtsResult(request),
+    });
+  } catch (error) {
+    console.error("ATS analysis error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to analyze ATS score",
+    });
+  }
 };
 
 export const uploadReferralResume = async (req, res) => {

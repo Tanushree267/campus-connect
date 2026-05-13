@@ -1,8 +1,10 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import type { ReferralRequest as MockReferralRequest } from "@/lib/mock-data";
 import { getUserById } from "@/lib/mock-data";
-import { FileText, Check, X, Clock, AlertTriangle, ExternalLink } from "lucide-react";
+import { FileText, Check, X, Clock, AlertTriangle, ExternalLink, Loader2, Sparkles } from "lucide-react";
 import { cn, formatName, normalizeBackendUrl, normalizeExternalUrl, renderAvatar } from "@/lib/utils";
 
 const statusConfig: Record<string, { label: string; cls: string; icon: typeof Check }> = {
@@ -35,6 +37,15 @@ type ReferralRequest = Partial<MockReferralRequest> & {
   jobRole?: string;
   jobId?: string;
   skillsMatchScore?: number;
+  atsScore?: number | null;
+  atsReport?: {
+    summary?: string;
+    matchedSkills?: string[];
+    missingSkills?: string[];
+    strengths?: string[];
+    weaknesses?: string[];
+    recommendation?: string;
+  } | null;
 };
 
 interface ReferralRequestCardProps {
@@ -42,10 +53,12 @@ interface ReferralRequestCardProps {
   perspective: "sender" | "receiver";
   onAccept?: (id: string) => void;
   onReject?: (id: string) => void;
+  onRunAts?: (id: string) => void;
+  atsProcessing?: boolean;
   className?: string;
 }
 
-export function ReferralRequestCard({ request, perspective, onAccept, onReject, className }: ReferralRequestCardProps) {
+export function ReferralRequestCard({ request, perspective, onAccept, onReject, onRunAts, atsProcessing = false, className }: ReferralRequestCardProps) {
   const requestId = request.id || request._id || "";
   const otherUser =
     perspective === "sender"
@@ -62,6 +75,10 @@ export function ReferralRequestCard({ request, perspective, onAccept, onReject, 
   const matchScore = typeof request.skillsMatchScore === "number" ? request.skillsMatchScore : null;
   const requesterRole = request.requester?.role || request.requesterRole;
   const otherUserName = formatName(otherUser?.name);
+  const atsScore = typeof request.atsScore === "number" ? request.atsScore : null;
+  const atsReport = request.atsReport;
+  const hasAtsReport = atsScore !== null && atsReport;
+  const scoreTone = atsScore !== null && atsScore >= 70 ? "text-emerald-600" : atsScore !== null && atsScore >= 50 ? "text-amber-600" : "text-red-500";
 
   return (
     <Card className={cn("transition-shadow hover:shadow-md", className)}>
@@ -108,6 +125,68 @@ export function ReferralRequestCard({ request, perspective, onAccept, onReject, 
             <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{motivation}</p>
           )}
         </div>
+
+        {perspective === "receiver" && (
+          <div className="mt-3 rounded-lg border bg-background p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium text-foreground">ATS Analysis</span>
+              </div>
+              <Button
+                size="sm"
+                variant={hasAtsReport ? "outline" : "default"}
+                disabled={atsProcessing || !requestId}
+                onClick={() => onRunAts?.(requestId)}
+              >
+                {atsProcessing ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 mr-1" />
+                )}
+                {hasAtsReport ? "View Cached ATS" : "Run ATS Analysis"}
+              </Button>
+            </div>
+
+            {hasAtsReport && (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">ATS Score</span>
+                    <span className={cn("text-sm font-bold tabular-nums", scoreTone)}>{atsScore}/100</span>
+                  </div>
+                  <Progress value={atsScore} className="h-2" />
+                </div>
+
+                {atsReport.summary && (
+                  <p className="text-xs leading-relaxed text-muted-foreground">{atsReport.summary}</p>
+                )}
+
+                {!!atsReport.matchedSkills?.length && (
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-emerald-700">Matched skills</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {atsReport.matchedSkills.map(skill => (
+                        <Badge key={skill} className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">{skill}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!!atsReport.missingSkills?.length && (
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-red-700">Missing skills</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {atsReport.missingSkills.map(skill => (
+                        <Badge key={skill} className="border-red-200 bg-red-50 text-red-700 hover:bg-red-50">{skill}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-3 flex items-center justify-between">
           <div className="flex flex-wrap items-center gap-3">

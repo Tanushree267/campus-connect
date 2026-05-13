@@ -11,6 +11,7 @@ import connectionRoutes from "./routes/connectionRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import postRoutes from "./routes/postRoutes.js";
 import referralRoutes from "./routes/referralRoutes.js";
+import chatRoutes from "./routes/chatRoutes.js";
 
 // Load environment variables
 dotenv.config();
@@ -77,6 +78,10 @@ app.use("/api/posts", postRoutes);
 
 // Referral routes
 app.use("/api/referrals", referralRoutes);
+
+// Chatbot routes
+app.use("/api/chat", chatRoutes);
+app.use("/chat", chatRoutes);
 
 // 404 handler
 app.use((req, res) => {

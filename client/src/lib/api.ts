@@ -533,3 +533,57 @@ export const updateReferralRequestStatus = async (requestId: string, status: "ac
 
   return normalizeReferralRequest(data.data);
 };
+
+/**
+ * Run ATS analysis for a received referral request
+ */
+export const analyzeReferralAts = async (requestId: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/referrals/${requestId}/analyze-ats`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to run ATS analysis");
+  }
+
+  return {
+    atsScore: data.atsScore,
+    atsReport: {
+      summary: data.summary || "",
+      matchedSkills: data.matchedSkills || [],
+      missingSkills: data.missingSkills || [],
+      strengths: data.strengths || [],
+      weaknesses: data.weaknesses || [],
+      recommendation: data.recommendation || "",
+    },
+  };
+};
+
+/**
+ * Send a message to the career chatbot
+ */
+export const sendChatMessage = async (message: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/chat`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ message }),
+  });
+
+  const data = await response.json().catch(() => ({
+    success: false,
+    reply: "Invalid server response",
+  }));
+
+  if (!response.ok) {
+    throw new Error(data.reply || data.message || "Failed to get chatbot response");
+  }
+
+  return data as {
+    success: boolean;
+    intent?: string;
+    reply: string;
+  };
+};

@@ -52,6 +52,20 @@ const referralRequestSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    atsScore: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: null,
+    },
+    atsReport: {
+      summary: { type: String, default: "" },
+      matchedSkills: { type: [String], default: [] },
+      missingSkills: { type: [String], default: [] },
+      strengths: { type: [String], default: [] },
+      weaknesses: { type: [String], default: [] },
+      recommendation: { type: String, default: "" },
+    },
   },
   {
     timestamps: true,
