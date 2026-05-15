@@ -17,19 +17,42 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const getStoredToken = () => localStorage.getItem("token");
 
-const normalizeUser = (user: User): User => ({
-  ...user,
-  id: user.id || (user as User & { _id?: string })._id || "",
-});
+/**
+ * MERGED NORMALIZE FUNCTION
+ * - Preserves original logic
+ * - Adds _id normalization support from the new file
+ * - Ensures both id and _id stay synced
+ */
+const normalizeUser = (user: User): User => {
+  const mongoId =
+    (user as User & { _id?: string })._id ||
+    user.id ||
+    "";
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+  return {
+    ...user,
+    _id: mongoId,
+    id: user.id || mongoId,
+  } as User;
+};
+
+export function AuthProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [token, setToken] = useState<string | null>(getStoredToken());
+
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState<boolean>(() => Boolean(getStoredToken()));
+
+  const [loading, setLoading] = useState<boolean>(() =>
+    Boolean(getStoredToken())
+  );
 
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+
     setToken(null);
     setCurrentUser(null);
     setLoading(false);
@@ -37,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = async () => {
     const storedToken = getStoredToken();
+
     if (!storedToken) {
       logout();
       return;
@@ -46,7 +70,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const user = normalizeUser(await getCurrentUser());
+
       localStorage.setItem("user", JSON.stringify(user));
+
       setCurrentUser(user);
       setToken(storedToken);
     } catch (error) {
@@ -67,8 +93,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = (newToken: string, user: User) => {
     const normalizedUser = normalizeUser(user);
+
     localStorage.setItem("token", newToken);
     localStorage.setItem("user", JSON.stringify(normalizedUser));
+
     setToken(newToken);
     setCurrentUser(normalizedUser);
     setLoading(false);
@@ -76,7 +104,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateCurrentUser = (user: User) => {
     const normalizedUser = normalizeUser(user);
+
     localStorage.setItem("user", JSON.stringify(normalizedUser));
+
     setCurrentUser(normalizedUser);
   };
 
@@ -86,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token,
       loading,
       isAuthenticated: Boolean(currentUser && token),
+
       login,
       logout,
       refreshUser,
@@ -94,11 +125,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [currentUser, token, loading]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
+
   if (!context) {
     throw new Error("useAuth must be used within AuthProvider");
   }

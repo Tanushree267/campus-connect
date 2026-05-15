@@ -6,6 +6,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000
  */
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
+
   return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -15,16 +16,27 @@ const getAuthHeaders = () => {
 const normalizeReferralRequest = (request: any) => ({
   ...request,
   id: request.id || request._id,
-  requesterId: request.requesterId?.id || request.requesterId?._id || request.requesterId,
-  alumniId: request.alumniId?.id || request.alumniId?._id || request.alumniId,
-  referralPostId: request.referralPostId?.id || request.referralPostId?._id || request.referralPostId,
+  requesterId:
+    request.requesterId?.id ||
+    request.requesterId?._id ||
+    request.requesterId,
+  alumniId:
+    request.alumniId?.id ||
+    request.alumniId?._id ||
+    request.alumniId,
+  referralPostId:
+    request.referralPostId?.id ||
+    request.referralPostId?._id ||
+    request.referralPostId,
 });
 
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
+
     reader.onload = () => resolve(String(reader.result));
     reader.onerror = () => reject(new Error("Failed to read file"));
+
     reader.readAsDataURL(file);
   });
 
@@ -46,6 +58,7 @@ export const getCurrentUser = async () => {
   // Normalize API response: map collegEmail to email
   const user = {
     ...data.user,
+    _id: data.user._id || data.user.id,
     id: data.user.id || data.user._id,
     email: data.user.collegEmail,
   };
@@ -86,18 +99,38 @@ export const searchUsers = async (filters: {
   availableOnly?: boolean;
 }) => {
   const params = new URLSearchParams();
-  
-  if (filters.search) params.append("search", filters.search);
-  if (filters.role && filters.role !== "all") params.append("role", filters.role);
-  if (filters.domain && filters.domain !== "all") params.append("domain", filters.domain);
-  if (filters.company && filters.company !== "all") params.append("company", filters.company);
-  if (filters.passOutYear && filters.passOutYear !== "all") params.append("passOutYear", filters.passOutYear);
-  if (filters.availableOnly) params.append("availableOnly", "true");
 
-  const response = await fetch(`${API_BASE_URL}/api/users/search?${params}`, {
-    method: "GET",
-    headers: getAuthHeaders(),
-  });
+  if (filters.search) {
+    params.append("search", filters.search);
+  }
+
+  if (filters.role && filters.role !== "all") {
+    params.append("role", filters.role);
+  }
+
+  if (filters.domain && filters.domain !== "all") {
+    params.append("domain", filters.domain);
+  }
+
+  if (filters.company && filters.company !== "all") {
+    params.append("company", filters.company);
+  }
+
+  if (filters.passOutYear && filters.passOutYear !== "all") {
+    params.append("passOutYear", filters.passOutYear);
+  }
+
+  if (filters.availableOnly) {
+    params.append("availableOnly", "true");
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/users/search?${params}`,
+    {
+      method: "GET",
+      headers: getAuthHeaders(),
+    }
+  );
 
   const data = await response.json();
 
@@ -153,7 +186,10 @@ export const updateCurrentUser = async (userData: {
 /**
  * Send connection request
  */
-export const sendConnectionRequest = async (toUserId: string, purpose: string) => {
+export const sendConnectionRequest = async (
+  toUserId: string,
+  purpose: string
+) => {
   const response = await fetch(`${API_BASE_URL}/api/connections`, {
     method: "POST",
     headers: getAuthHeaders(),
@@ -163,7 +199,9 @@ export const sendConnectionRequest = async (toUserId: string, purpose: string) =
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to send connection request");
+    throw new Error(
+      data.message || "Failed to send connection request"
+    );
   }
 
   return data;
@@ -191,15 +229,20 @@ export const getConnections = async () => {
  * Get connection count for current user
  */
 export const getConnectionCount = async () => {
-  const response = await fetch(`${API_BASE_URL}/api/connections/count`, {
-    method: "GET",
-    headers: getAuthHeaders(),
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/api/connections/count`,
+    {
+      method: "GET",
+      headers: getAuthHeaders(),
+    }
+  );
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to get connection count");
+    throw new Error(
+      data.message || "Failed to get connection count"
+    );
   }
 
   return data.count;
@@ -209,15 +252,20 @@ export const getConnectionCount = async () => {
  * Get connection status with another user
  */
 export const getConnectionStatus = async (userId: string) => {
-  const response = await fetch(`${API_BASE_URL}/api/connections/status/${userId}`, {
-    method: "GET",
-    headers: getAuthHeaders(),
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/api/connections/status/${userId}`,
+    {
+      method: "GET",
+      headers: getAuthHeaders(),
+    }
+  );
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to get connection status");
+    throw new Error(
+      data.message || "Failed to get connection status"
+    );
   }
 
   return data;
@@ -227,15 +275,20 @@ export const getConnectionStatus = async (userId: string) => {
  * Get unread notification count
  */
 export const getUnreadNotificationCount = async () => {
-  const response = await fetch(`${API_BASE_URL}/api/notifications/unread-count`, {
-    method: "GET",
-    headers: getAuthHeaders(),
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/api/notifications/unread-count`,
+    {
+      method: "GET",
+      headers: getAuthHeaders(),
+    }
+  );
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to get unread count");
+    throw new Error(
+      data.message || "Failed to get unread count"
+    );
   }
 
   return data;
@@ -245,15 +298,20 @@ export const getUnreadNotificationCount = async () => {
  * Cancel connection request
  */
 export const cancelConnectionRequest = async (userId: string) => {
-  const response = await fetch(`${API_BASE_URL}/api/connections/${userId}`, {
-    method: "DELETE",
-    headers: getAuthHeaders(),
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/api/connections/${userId}`,
+    {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    }
+  );
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to cancel connection request");
+    throw new Error(
+      data.message || "Failed to cancel connection request"
+    );
   }
 
   return data;
@@ -271,7 +329,9 @@ export const getNotifications = async () => {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to get notifications");
+    throw new Error(
+      data.message || "Failed to get notifications"
+    );
   }
 
   return data.notifications;
@@ -281,15 +341,20 @@ export const getNotifications = async () => {
  * Mark all notifications as read
  */
 export const markAllNotificationsRead = async () => {
-  const response = await fetch(`${API_BASE_URL}/api/notifications/read-all`, {
-    method: "PUT",
-    headers: getAuthHeaders(),
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/api/notifications/read-all`,
+    {
+      method: "PUT",
+      headers: getAuthHeaders(),
+    }
+  );
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to mark notifications as read");
+    throw new Error(
+      data.message || "Failed to mark notifications as read"
+    );
   }
 
   return data;
@@ -299,15 +364,20 @@ export const markAllNotificationsRead = async () => {
  * Accept a connection request
  */
 export const acceptConnection = async (connectionId: string) => {
-  const response = await fetch(`${API_BASE_URL}/api/connections/${connectionId}/accept`, {
-    method: "PUT",
-    headers: getAuthHeaders(),
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/api/connections/${connectionId}/accept`,
+    {
+      method: "PUT",
+      headers: getAuthHeaders(),
+    }
+  );
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to accept connection");
+    throw new Error(
+      data.message || "Failed to accept connection"
+    );
   }
 
   return data;
@@ -317,15 +387,20 @@ export const acceptConnection = async (connectionId: string) => {
  * Reject a connection request
  */
 export const rejectConnection = async (connectionId: string) => {
-  const response = await fetch(`${API_BASE_URL}/api/connections/${connectionId}/reject`, {
-    method: "PUT",
-    headers: getAuthHeaders(),
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/api/connections/${connectionId}/reject`,
+    {
+      method: "PUT",
+      headers: getAuthHeaders(),
+    }
+  );
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to reject connection");
+    throw new Error(
+      data.message || "Failed to reject connection"
+    );
   }
 
   return data;
@@ -407,7 +482,9 @@ export const getFeedPosts = async () => {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to fetch feed posts");
+    throw new Error(
+      data.message || "Failed to fetch feed posts"
+    );
   }
 
   return data.posts;
@@ -436,14 +513,18 @@ export const getPostById = async (id: string) => {
  */
 export const uploadReferralResume = async (file: File) => {
   const fileData = await readFileAsDataUrl(file);
-  const response = await fetch(`${API_BASE_URL}/api/referrals/resume`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({
-      fileName: file.name,
-      fileData,
-    }),
-  });
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/referrals/resume`,
+    {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        fileName: file.name,
+        fileData,
+      }),
+    }
+  );
 
   const data = await response.json();
 
@@ -472,8 +553,15 @@ export const createReferralRequest = async (requestData: {
   const data = await response.json();
 
   if (!response.ok) {
-    const validationMessage = data.errors?.map((error: any) => error.msg).join(", ");
-    throw new Error(validationMessage || data.message || "Failed to create referral request");
+    const validationMessage = data.errors
+      ?.map((error: any) => error.msg)
+      .join(", ");
+
+    throw new Error(
+      validationMessage ||
+        data.message ||
+        "Failed to create referral request"
+    );
   }
 
   return normalizeReferralRequest(data.data);
@@ -483,15 +571,20 @@ export const createReferralRequest = async (requestData: {
  * Get sent referral requests
  */
 export const getSentReferralRequests = async () => {
-  const response = await fetch(`${API_BASE_URL}/api/referrals/sent`, {
-    method: "GET",
-    headers: getAuthHeaders(),
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/api/referrals/sent`,
+    {
+      method: "GET",
+      headers: getAuthHeaders(),
+    }
+  );
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to fetch sent requests");
+    throw new Error(
+      data.message || "Failed to fetch sent requests"
+    );
   }
 
   return data.data.map(normalizeReferralRequest);
@@ -501,15 +594,20 @@ export const getSentReferralRequests = async () => {
  * Get received referral requests
  */
 export const getReceivedReferralRequests = async () => {
-  const response = await fetch(`${API_BASE_URL}/api/referrals/received`, {
-    method: "GET",
-    headers: getAuthHeaders(),
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/api/referrals/received`,
+    {
+      method: "GET",
+      headers: getAuthHeaders(),
+    }
+  );
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to fetch received requests");
+    throw new Error(
+      data.message || "Failed to fetch received requests"
+    );
   }
 
   return data.data.map(normalizeReferralRequest);
@@ -518,17 +616,25 @@ export const getReceivedReferralRequests = async () => {
 /**
  * Update referral request status
  */
-export const updateReferralRequestStatus = async (requestId: string, status: "accepted" | "rejected") => {
-  const response = await fetch(`${API_BASE_URL}/api/referrals/${requestId}/status`, {
-    method: "PATCH",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ status }),
-  });
+export const updateReferralRequestStatus = async (
+  requestId: string,
+  status: "accepted" | "rejected"
+) => {
+  const response = await fetch(
+    `${API_BASE_URL}/api/referrals/${requestId}/status`,
+    {
+      method: "PATCH",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ status }),
+    }
+  );
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to update request status");
+    throw new Error(
+      data.message || "Failed to update request status"
+    );
   }
 
   return normalizeReferralRequest(data.data);
@@ -537,16 +643,23 @@ export const updateReferralRequestStatus = async (requestId: string, status: "ac
 /**
  * Run ATS analysis for a received referral request
  */
-export const analyzeReferralAts = async (requestId: string) => {
-  const response = await fetch(`${API_BASE_URL}/api/referrals/${requestId}/analyze-ats`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-  });
+export const analyzeReferralAts = async (
+  requestId: string
+) => {
+  const response = await fetch(
+    `${API_BASE_URL}/api/referrals/${requestId}/analyze-ats`,
+    {
+      method: "POST",
+      headers: getAuthHeaders(),
+    }
+  );
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to run ATS analysis");
+    throw new Error(
+      data.message || "Failed to run ATS analysis"
+    );
   }
 
   return {
@@ -565,7 +678,9 @@ export const analyzeReferralAts = async (requestId: string) => {
 /**
  * Send a message to the career chatbot
  */
-export const sendChatMessage = async (message: string) => {
+export const sendChatMessage = async (
+  message: string
+) => {
   const response = await fetch(`${API_BASE_URL}/api/chat`, {
     method: "POST",
     headers: getAuthHeaders(),
@@ -578,7 +693,11 @@ export const sendChatMessage = async (message: string) => {
   }));
 
   if (!response.ok) {
-    throw new Error(data.reply || data.message || "Failed to get chatbot response");
+    throw new Error(
+      data.reply ||
+        data.message ||
+        "Failed to get chatbot response"
+    );
   }
 
   return data as {
